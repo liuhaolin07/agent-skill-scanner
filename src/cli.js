@@ -2,7 +2,7 @@
 import { readFile, stat, readdir } from "node:fs/promises";
 import { resolve, basename, relative } from "node:path";
 import process from "node:process";
-import { scanFiles } from "./scanner.js";
+import { scanFiles, toSarif } from "./scanner.js";
 
 const ALLOWED = /(?:\.md|\.json|\.ya?ml)$/i;
 
@@ -52,10 +52,24 @@ async function main() {
     name: paths.length === 1 ? basename(path) : relative(root, path),
     content: await readFile(path, "utf8"),
   })));
-  const result = scanFiles(files);
-  if (args.includes("--json")) console.log(JSON.stringify(result, null, 2));
+  const result = scanFiles(files, { disabledRules: extractDisabled(args) });
+  if (args.includes("--sarif")) {
+    console.log(JSON.stringify(toSarif(result), null, 2));
+  } else if (args.includes("--json")) console.log(JSON.stringify(result, null, 2));
   else printHuman(result);
   process.exitCode = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 }[result.risk];
+}
+
+// Collect every value passed after --disable-rule (repeatable, comma-separated).
+function extractDisabled(args) {
+  const values = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--disable-rule" && args[i + 1] && !args[i + 1].startsWith("-")) {
+      values.push(...args[i + 1].split(",").map((s) => s.trim()).filter(Boolean));
+      i += 1;
+    }
+  }
+  return values;
 }
 
 main().catch((error) => {

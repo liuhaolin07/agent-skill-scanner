@@ -31,6 +31,10 @@ Node 引擎扫描单文件：
 
 ```bash
 npm run scan -- ./SKILL.md
+npm run scan -- ./my-skill --json
+npm run scan -- ./my-skill --sarif          # SARIF 2.1.0（GitHub Code Scanning 兼容）
+npm run scan -- ./my-skill --min-risk HIGH
+npm run scan -- ./my-skill --disable-rule NETWORK_ACCESS,SUSPICIOUS_URL
 ```
 
 Python 引擎（无需 Node，Hermes agent 调用）：
@@ -38,7 +42,7 @@ Python 引擎（无需 Node，Hermes agent 调用）：
 ```bash
 python src/scanner.py ./SKILL.md
 python src/scanner.py ./my-skill --json
-python src/scanner.py ./my-skill --min-risk HIGH
+python src/scanner.py ./my-skill --disable-rule SECRET_BROAD_ENV
 ```
 
 扫描整个目录并输出 JSON：
@@ -61,9 +65,22 @@ npm run scan -- ./my-skill --json
 
 ```bash
 npm test        # Node 引擎（11 用例）
-npm run test:py # Python 引擎（11 用例，对齐 Node）
-npm run test:all  # 双端一起跑
+python test/test_scanner.py  # Python 引擎（11 用例，对齐 Node）
+node --test test/corpus.test.js   # 回归基准（4 个 edge case 用例）
+python test/test_corpus.py        # 同一基准的 Python 侧
+npm run test:all  # 双端单元测试一起跑
 ```
+
+回归基准（`examples/corpus/`）锁定每个用例的预期规则命中，防止改规则时"修一个误报、引入两个漏报"。
+
+## 2026-08 新增能力
+
+- **多行拼接检测**：`curl ... |` + 下一行 `bash`、反斜杠续行、`&&` 结尾等跨行命令会被合并为逻辑行再匹配，绕过手段可检出
+- **YAML frontmatter 结构感知**：`permissions:\n  - network: "*"` 这类多行 YAML 列表会折叠成 `父键: 值` 补扫，上下文敏感规则可命中
+- **回归基准 corpus**：`examples/corpus/` 4 个 edge case（多行管道、frontmatter 通配、反引号 URL 表格、SSH+env），双引擎断言测试
+- **SARIF 2.1.0 输出**：`--sarif`，可直接对接 GitHub Code Scanning
+- **`--disable-rule`**：CLI 关闭指定规则（可重复、逗号分隔）
+- **pre-commit 钩子**：`.pre-commit-config.yaml` 提交前扫暂存的技能文件 + 校验规则束同步
 
 ## 修改规则
 

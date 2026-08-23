@@ -53,6 +53,7 @@ class Rule:
     why: str
     remediation: str
     patterns: list = field(default_factory=list)  # compiled regexes
+    supersedes: list = field(default_factory=list)  # rule IDs not double-scored
 
 
 def _load_rules() -> list[Rule]:
@@ -75,6 +76,7 @@ def _load_rules() -> list[Rule]:
             why=entry["why"],
             remediation=entry["remediation"],
             patterns=compiled,
+            supersedes=list(entry.get("supersedes", [])),
         ))
     return rules
 
@@ -108,10 +110,35 @@ def excerpt(line: str, max_len: int = 180) -> str:
 
 
 def mask_secrets(value: str) -> str:
-    """Redact private-key headers and token-like assignments in evidence."""
+    """Redact private-key headers, credentials, and token-like values in evidence."""
     value = re.sub(r"(-----BEGIN [^-]+ PRIVATE KEY-----).*", r"\1 [REDACTED]", value, flags=re.I)
     value = re.sub(
         r"((?:token|secret|password|api[_-]?key)\s*[:=]\s*)[^\s,\"']+",
+        r"\1[REDACTED]",
+        value,
+        flags=re.I,
+    )
+    # JSON / YAML quoted values: "api_key": "secret-value"
+    value = re.sub(
+        r"([\"'](?:api[_-]?key|token|secret|password|authorization|auth|access[_-]?key|secret[_-]?key|client[_-]?secret)[\"']\s*[:=]\s*[\"'])[^\"']+",
+        r"\1[REDACTED]",
+        value,
+        flags=re.I,
+    )
+    # HTTP auth headers: Authorization: Bearer abc...
+    value = re.sub(
+        r"(authorization\s*:\s*(?:bearer|basic|token)\s+)[^\s,;]+",
+        r"\1[REDACTED]",
+        value,
+        flags=re.I,
+    )
+    # GitHub PATs (ghp_/gho_/ghu_/ghs_/ghr_), AWS access keys, generic sk- tokens
+    value = re.sub(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b", "[REDACTED]", value, flags=re.I)
+    value = re.sub(r"\bAKIA[0-9A-Z]{16}\b", "[REDACTED]", value)
+    value = re.sub(r"\bsk-[A-Za-z0-9_-]{16,}\b", "[REDACTED]", value)
+    # Credentials in URL query strings: ?token=abc&key=xyz
+    value = re.sub(
+        r"([?&](?:token|key|secret|password|api[_-]?key|access[_-]?key|sig|signature)=)[^&\s\"']+",
         r"\1[REDACTED]",
         value,
         flags=re.I,
@@ -232,8 +259,23 @@ def build_frontmatter_supplement(text: str) -> list[tuple[int, str]]:
 
 
 def compute_risk(findings: list[Finding]) -> tuple[int, str]:
-    """Score 0-100 and map to a risk level, mirroring the Node engine."""
-    score = min(100, sum(SEVERITY_POINTS[f.severity] for f in findings))
+    """Score 0-100 and map to a risk level, mirroring the Node engine.
+
+    Superseded findings still appear in the report but do not double-count
+    toward the score (e.g. `curl | bash` already flags DOWNLOAD_EXECUTE;
+    DOWNLOAD_COMMAND / SUSPICIOUS_URL / URL_REFERENCE are shown, not scored).
+    """
+    by_id = {f.id: f for f in findings}
+    superseded = set()
+    for finding in findings:
+        rule = next((r for r in RULES if r.id == finding.id), None)
+        for sid in getattr(rule, "supersedes", []) or []:
+            if sid in by_id:
+                superseded.add(sid)
+    score = min(100, sum(
+        SEVERITY_POINTS[f.severity] if f.id not in superseded else 0
+        for f in findings
+    ))
     severities = {f.severity for f in findings}
     if "critical" in severities or score >= 80:
         level = "CRITICAL"
@@ -255,9 +297,19 @@ def validate_input(name: str, content: str) -> None:
         raise ValueError(f"File is larger than the {MAX_FILE_BYTES // 1_000_000} MB scan limit.")
 
 
+def normalize_content(content: str) -> str:
+    """NFKC-normalize (collapse confusable chars) and strip zero-width chars."""
+    import unicodedata
+    return "".join(
+        ch for ch in unicodedata.normalize("NFKC", content)
+        if ch not in "\u200b\u200c\u200d\ufeff\u2060"
+    )
+
+
 def scan_text(name: str, content: str, disabled_rules: Optional[list[str]] = None) -> dict[str, Any]:
     """Scan a single file's text. Returns the same report shape as the Node engine."""
     validate_input(name, content)
+    content = normalize_content(content)
 
     disabled = set(disabled_rules or [])
     findings = []
@@ -295,7 +347,7 @@ def scan_text(name: str, content: str, disabled_rules: Optional[list[str]] = Non
     return {
         "schemaVersion": "1.0",
         "file": name,
-        "scannedAt": __import__("datetime").datetime.now().isoformat() + "Z",
+        "scannedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
         "risk": level,
         "score": score,
         "summary": f"{len(findings)} security {'signal' if len(findings) == 1 else 'signals'} detected."
@@ -411,16 +463,45 @@ EXIT_CODES = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
 ALLOWED_SUFFIXES = (".md", ".json", ".yaml", ".yml")
 
 
-def _find_files(input_path: Path) -> list[Path]:
+SKIP_DIRS = {
+    ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "env",
+    "__pycache__", ".tox", ".nox", "dist", "build", ".next", ".nuxt",
+    ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache", "coverage",
+}
+MAX_TOTAL_BYTES = 50_000_000  # per scan
+MAX_FILES = 1_000  # per scan
+
+
+def _find_files(input_path: Path) -> list[tuple[Path, int]]:
+    """Return [(path, byte_size), ...] sorted case-sensitively (Node-aligned).
+
+    Skips vendored/VCS/build directories, enforces a per-file byte limit
+    before reading, and caps total files / total bytes per scan.
+    """
     if input_path.is_file():
-        return [input_path]
+        return [(input_path, input_path.stat().st_size)]
+
+    found: list[tuple[Path, int]] = []
+    for p in input_path.rglob("*"):
+        if not p.is_file() or p.suffix.lower() not in ALLOWED_SUFFIXES:
+            continue
+        rel_parts = p.relative_to(input_path).parts
+        if any(part in SKIP_DIRS for part in rel_parts[:-1]):
+            continue
+        size = p.stat().st_size
+        if size > MAX_FILE_BYTES:
+            print(f"skip {p.relative_to(input_path)}: {size} bytes exceeds {MAX_FILE_BYTES} limit", file=sys.stderr)
+            continue
+        found.append((p, size))
+        if len(found) >= MAX_FILES:
+            print(f"warning: file limit ({MAX_FILES}) reached; remaining files skipped", file=sys.stderr)
+            break
+    total = sum(s for _, s in found)
+    if total > MAX_TOTAL_BYTES:
+        print(f"warning: total {total} bytes exceeds {MAX_TOTAL_BYTES} limit", file=sys.stderr)
     # Sort case-sensitively on the raw string to match the Node engine's
     # Array.prototype.sort() (Windows Path.__lt__ is normcase-insensitive).
-    paths = [
-        p for p in input_path.rglob("*")
-        if p.is_file() and p.suffix.lower() in ALLOWED_SUFFIXES
-    ]
-    return sorted(paths, key=str)
+    return sorted(found, key=lambda item: str(item[0]))
 
 
 def _print_human(result: dict[str, Any]) -> None:
@@ -439,7 +520,12 @@ def _print_human(result: dict[str, Any]) -> None:
 def main(argv: Optional[list[str]] = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     if not args or "-h" in args or "--help" in args:
-        print("Usage: python scanner.py <file-or-directory> [--json] [--min-risk LEVEL]")
+        print("Usage: python scanner.py <file-or-directory> [--json] [--sarif] [--fail-on LEVEL] [--disable-rule ID]")
+        print("Options:")
+        print("  --json            JSON report")
+        print("  --sarif           SARIF 2.1.0 report")
+        print("  --fail-on LEVEL   exit non-zero only if risk >= LEVEL (LOW|MEDIUM|HIGH|CRITICAL)")
+        print("  --disable-rule ID disable a rule (repeatable, comma-separated)")
         print("Exit codes: 0 LOW, 1 MEDIUM, 2 HIGH, 3 CRITICAL, 64 invalid input")
         return 0 if args else 64
 
@@ -458,7 +544,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 64
 
     files = []
-    for path in paths:
+    for path, _ in paths:
         try:
             files.append({
                 "name": path.name if len(paths) == 1 else str(path.relative_to(root)),
@@ -477,7 +563,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     else:
         _print_human(result)
 
+    try:
+        fail_on = _fail_on_level(args)
+    except ValueError as exc:
+        print(f"Scan failed: {exc}", file=sys.stderr)
+        return 64
+    if fail_on is not None:
+        # Gate semantics: non-zero only when the scan risk reaches the threshold.
+        if LEVELS.index(result["risk"]) >= LEVELS.index(fail_on):
+            return EXIT_CODES[result["risk"]]
+        return 0
     return EXIT_CODES.get(result["risk"], 64)
+
+
+def _fail_on_level(args: list[str]) -> Optional[str]:
+    """Parse --fail-on LEVEL; returns None when absent."""
+    for i, arg in enumerate(args[:-1]):
+        if arg == "--fail-on":
+            level = args[i + 1].upper()
+            if level in LEVELS:
+                return level
+            raise ValueError(f"Invalid --fail-on level '{args[i + 1]}' (expected LOW|MEDIUM|HIGH|CRITICAL)")
+    return None
 
 
 def _extract_disabled(args: list[str]) -> list[str]:

@@ -1,5 +1,7 @@
 const LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
+export { LEVELS };
+
 const SEVERITY_POINTS = {
   info: 0,
   low: 4,
@@ -46,7 +48,17 @@ function excerpt(line, max = 180) {
 function maskSecrets(value) {
   return value
     .replace(/(-----BEGIN [^-]+ PRIVATE KEY-----).*/i, "$1 [REDACTED]")
-    .replace(/((?:token|secret|password|api[_-]?key)\s*[:=]\s*)[^\s,"']+/gi, "$1[REDACTED]");
+    .replace(/((?:token|secret|password|api[_-]?key)\s*[:=]\s*)[^\s,"']+/gi, "$1[REDACTED]")
+    // JSON / YAML quoted values: "api_key": "secret-value"
+    .replace(/(["'](?:api[_-]?key|token|secret|password|authorization|auth|access[_-]?key|secret[_-]?key|client[_-]?secret)["']\s*[:=]\s*["'])[^"']+/gi, "$1[REDACTED]")
+    // HTTP auth headers: Authorization: Bearer abc...
+    .replace(/(authorization\s*:\s*(?:bearer|basic|token)\s+)[^\s,;]+/gi, "$1[REDACTED]")
+    // GitHub PATs (ghp_/gho_/ghu_/ghs_/ghr_), AWS access keys, generic sk- tokens
+    .replace(/\bgh[pousr]_[A-Za-z0-9]{20,}\b/gi, "[REDACTED]")
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED]")
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}\b/g, "[REDACTED]")
+    // Credentials in URL query strings: ?token=abc&key=xyz
+    .replace(/([?&](?:token|key|secret|password|api[_-]?key|access[_-]?key|sig|signature)=)[^&\s"']+/gi, "$1[REDACTED]");
 }
 
 function collectMatches(text, rule) {
@@ -150,7 +162,23 @@ function buildFrontmatterSupplement(text) {
 }
 
 function computeRisk(findings) {
-  const score = Math.min(100, findings.reduce((sum, finding) => sum + SEVERITY_POINTS[finding.severity], 0));
+  // Superseded findings still appear in the report but do not double-count
+  // toward the score (e.g. `curl | bash` already flags DOWNLOAD_EXECUTE;
+  // DOWNLOAD_COMMAND / SUSPICIOUS_URL / URL_REFERENCE are shown, not scored).
+  const superseded = new Set();
+  const byId = new Map(findings.map((finding) => [finding.id, finding]));
+  for (const finding of findings) {
+    const rule = RULES.find((r) => r.id === finding.id);
+    if (rule?.supersedes) {
+      for (const id of rule.supersedes) {
+        if (byId.has(id)) superseded.add(id);
+      }
+    }
+  }
+  const score = Math.min(100, findings.reduce(
+    (sum, finding) => sum + (superseded.has(finding.id) ? 0 : SEVERITY_POINTS[finding.severity]),
+    0,
+  ));
   const hasCritical = findings.some((finding) => finding.severity === "critical");
   const hasHigh = findings.some((finding) => finding.severity === "high");
   const hasMedium = findings.some((finding) => finding.severity === "medium");
@@ -170,8 +198,17 @@ function validateInput(name, content) {
   if (content.length > 2_000_000) throw new RangeError("File is larger than the 2 MB scan limit.");
 }
 
+// Normalize Unicode (NFKC collapses lookalike/confusable characters) and drop
+// zero-width characters used to hide risky tokens (e.g. c\u200Burl → curl).
+function normalizeContent(content) {
+  return content
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, "");
+}
+
 export function scanText(name, content, { disabledRules = [] } = {}) {
   validateInput(name, content);
+  content = normalizeContent(content);
   const disabled = new Set(disabledRules);
   const findings = RULES
     .filter((rule) => !disabled.has(rule.id))

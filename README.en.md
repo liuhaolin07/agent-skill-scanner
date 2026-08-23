@@ -33,7 +33,7 @@ Node engine:
 npm run scan -- ./SKILL.md
 npm run scan -- ./my-skill --json
 npm run scan -- ./my-skill --sarif
-npm run scan -- ./my-skill --min-risk HIGH
+npm run scan -- ./my-skill --fail-on HIGH
 npm run scan -- ./my-skill --disable-rule NETWORK_ACCESS --disable-rule SUSPICIOUS_URL
 ```
 

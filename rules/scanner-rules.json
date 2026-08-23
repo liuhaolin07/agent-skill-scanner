@@ -53,9 +53,7 @@
       "(?:child_process|execSync|spawnSync|shelljs|(?:^|[^/\\w])zx\\b)",
       "(?:subprocess\\.(?:run|Popen|call)|os\\.system|shell\\s*=\\s*True)",
       "(?:bash|sh|zsh|cmd(?:\\.exe)?|powershell(?:\\.exe)?|pwsh)\\s+(?:-c|-Command|\\/c)\\b",
-      "(?:run_shell|shell_exec|execute_command|exec_command)",
-      "[\"']?command[\"']?\\s*:\\s*[\"'][^\"'\\n]+[\"']",
-      "^\\s*command\\s*:\\s*\\S+"
+      "(?:run_shell|shell_exec|execute_command|exec_command)"
     ]
   },
   {
@@ -71,6 +69,11 @@
       "Invoke-(?:WebRequest|RestMethod)[^\\n|;&]{0,300}\\|[^\\n]*(?:iex|Invoke-Expression)",
       "(?:certutil|bitsadmin)[^\\n]{0,300}(?:&&|;|\\|)[^\\n]*(?:start|exec|call|powershell|cmd)",
       "(?:base64\\s+(?:-d|--decode)|FromBase64String)[^\\n]{0,300}(?:\\||iex|exec|eval)"
+    ],
+    "supersedes": [
+      "DOWNLOAD_COMMAND",
+      "SUSPICIOUS_URL",
+      "URL_REFERENCE"
     ]
   },
   {
@@ -86,6 +89,9 @@
       "\\bInvoke-(?:WebRequest|RestMethod)\\b",
       "\\b(?:certutil\\s+-urlcache|bitsadmin\\s+\\/transfer)\\b",
       "\\b(?:downloadFile|urlretrieve)\\s*\\("
+    ],
+    "supersedes": [
+      "URL_REFERENCE"
     ]
   },
   {
@@ -101,6 +107,9 @@
       "https?:\\/\\/(?:bit\\.ly|tinyurl\\.com|t\\.co|is\\.gd|ngrok(?:-free)?\\.app|pastebin\\.com|paste\\.ee|transfer\\.sh|0x0\\.st)\\b",
       "https?:\\/\\/(?:raw\\.githubusercontent\\.com|gist\\.githubusercontent\\.com)\\b",
       "\\b(?:data|javascript):[^\\s\"']+"
+    ],
+    "supersedes": [
+      "URL_REFERENCE"
     ]
   },
   {
@@ -120,14 +129,13 @@
     "id": "NETWORK_ACCESS",
     "category": "network_access",
     "severity": "medium",
-    "title": "Performs external network access",
-    "why": "External requests may disclose local content and create a supply-chain dependency.",
+    "title": "Performs external network requests",
+    "why": "Real network calls (fetch/axios/requests/WebSocket/...) may disclose local content.",
     "remediation": "Document the purpose and allowlist only the required hosts.",
     "case_insensitive": true,
     "patterns": [
       "\\b(?:fetch|axios\\.(?:get|post|request)|requests?\\.(?:get|post|put|delete)|httpx\\.|urllib\\.request|net\\.Dial)\\s*\\(",
-      "\\b(?:WebSocket|EventSource)\\s*\\(",
-      "https?:\\/\\/[a-z0-9.-]+(?::\\d+)?(?:\\/[^\\s\"'`)>,]*)?"
+      "\\b(?:WebSocket|EventSource)\\s*\\("
     ]
   },
   {
@@ -185,6 +193,50 @@
       "\\brm\\s+-[a-z]*r[a-z]*f[a-z]*\\s+(?:\\/|~|\\$HOME|\\*)",
       "\\bRemove-Item\\b[^\\n]*(?:-Recurse[^\\n]*-Force|-Force[^\\n]*-Recurse)",
       "\\b(?:mkfs\\.|format\\s+[a-z]:|diskpart\\b|dd\\s+if=.*\\s+of=\\/dev\\/)"
+    ]
+  },
+  {
+    "id": "URL_REFERENCE",
+    "category": "network_access",
+    "severity": "info",
+    "title": "References a URL",
+    "why": "Documentation or configuration references a URL; informational only (not evidence of a network call).",
+    "remediation": "No action required unless the URL itself is suspicious.",
+    "case_insensitive": true,
+    "patterns": [
+      "https?://[a-z0-9.-]+(?::\\d+)?(?:/[^\\s\\\"'`)>,\\]]*)?"
+    ]
+  },
+  {
+    "id": "PROCESS_SPAWN",
+    "category": "shell_execution",
+    "severity": "medium",
+    "title": "Spawns a local process",
+    "why": "Manifest or skill launches a local process (e.g. MCP stdio `command`). Normal for MCP servers; risk depends on what runs.",
+    "remediation": "Pin the executable and validate arguments; prefer an API call over a shell.",
+    "case_insensitive": true,
+    "patterns": [
+      "[\\\"']?command[\\\"']?\\s*:\\s*[\\\"'][^\\\"'\\n]+[\\\"']",
+      "^\\s*command\\s*:\\s*\\S+",
+      "\\b(?:execSync|spawnSync)\\s*\\(\\s*[\\\"'][^\\\"']+[\\\"']"
+    ]
+  },
+  {
+    "id": "UNPINNED_PACKAGE",
+    "category": "shell_execution",
+    "severity": "high",
+    "title": "Runs an unpinned package",
+    "why": "npx -y / uvx / @latest / floating versions fetch mutable code at runtime — a supply-chain risk.",
+    "remediation": "Pin exact versions and verify checksums.",
+    "case_insensitive": true,
+    "patterns": [
+      "\\bnpx\\s+-y\\b",
+      "\\buvx\\b",
+      "\\b(?:npx|uvx)\\s+[^\\s\\\"']*@(?:latest|next)\\b",
+      "\\\"(?:npx|uvx)[^\\\"]*\\\""
+    ],
+    "supersedes": [
+      "PROCESS_SPAWN"
     ]
   }
 ]

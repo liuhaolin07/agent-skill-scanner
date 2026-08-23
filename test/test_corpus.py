@@ -19,22 +19,24 @@ from scanner import scan_files  # noqa: E402
 CORPUS = {
     "multiline-pipe": {
         "risk": "CRITICAL",
-        "findings": ["DOWNLOAD_EXECUTE", "DOWNLOAD_COMMAND", "NETWORK_ACCESS"],
+        # DOWNLOAD_COMMAND/URL_REFERENCE are superseded (shown, not scored)
+        "findings": ["DOWNLOAD_EXECUTE", "DOWNLOAD_COMMAND", "URL_REFERENCE"],
     },
     "frontmatter-wildcard": {
         "risk": "HIGH",
-        "findings": ["SHELL_EXECUTION", "NETWORK_UNRESTRICTED"],
+        # PROCESS_SPAWN is superseded by UNPINNED_PACKAGE
+        "findings": ["NETWORK_UNRESTRICTED", "PROCESS_SPAWN", "UNPINNED_PACKAGE"],
     },
     "backtick-url-table": {
-        "risk": "MEDIUM",
-        "findings": ["NETWORK_ACCESS"],
+        "risk": "LOW",  # plain URL references are info-level, not a finding signal
+        "findings": ["URL_REFERENCE"],
     },
     "ssh-and-env": {
         "risk": "CRITICAL",
         "findings": [
             "SECRET_ENV_FILE", "SECRET_SSH_KEY", "SHELL_EXECUTION",
             "DOWNLOAD_EXECUTE", "DOWNLOAD_COMMAND", "SUSPICIOUS_URL",
-            "NETWORK_ACCESS", "MEMORY_MODIFICATION",
+            "URL_REFERENCE", "MEMORY_MODIFICATION",
         ],
     },
 }

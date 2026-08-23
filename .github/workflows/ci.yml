@@ -34,8 +34,10 @@ jobs:
 
       - name: Cross-engine consistency (same output for a fixture set)
         run: |
-          node src/cli.js examples --json > /tmp/node.json
-          python src/scanner.py examples --json > /tmp/py.json
+          # exit codes reflect the fixture risk (risky/ is CRITICAL by design);
+          # capture output regardless and compare the JSON only
+          node src/cli.js examples --json > /tmp/node.json || true
+          python src/scanner.py examples --json > /tmp/py.json || true
           python -c "
           import json
           n = json.load(open('/tmp/node.json'))

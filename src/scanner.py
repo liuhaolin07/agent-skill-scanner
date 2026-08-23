@@ -509,6 +509,20 @@ def _find_files(input_path: Path) -> list[tuple[Path, int]]:
     return sorted(found, key=lambda item: str(item[0]))
 
 
+def _common_root(roots: list[Path]) -> Path:
+    """Deepest common ancestor of all scan roots.
+
+    Report names are relative to this root so same-basename files from
+    different inputs stay distinguishable (e.g. "skill-a/SKILL.md" vs
+    "skill-b/SKILL.md" when scanning both directories). Falls back to the
+    first root when the inputs live on different Windows drives.
+    """
+    try:
+        return Path(os.path.commonpath([str(r) for r in roots]))
+    except ValueError:
+        return Path(str(roots[0]))
+
+
 def _print_human(result: dict[str, Any]) -> None:
     print(f"[{result['risk']}] score {result['score']}/100 · {result['fileCount']} file(s) · {result['findingCount']} finding(s)")
     for report in result["reports"]:
@@ -575,11 +589,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Scan failed: total {total_bytes} bytes exceeds the {MAX_TOTAL_BYTES} byte limit", file=sys.stderr)
         return 64
 
+    # Names relative to the common root of all inputs: single-file scans keep
+    # the bare basename, single-directory scans keep in-tree paths, and
+    # multi-root scans stay collision-free even with same-named files.
+    common_root = _common_root([r for _, _, r in paths])
     files = []
-    for path, _, root in paths:
+    for path, _, _ in paths:
+        try:
+            name = str(path.relative_to(common_root))
+        except ValueError:
+            name = str(path.absolute())  # different drive: absolute stays unique
         try:
             files.append({
-                "name": path.name if len(paths) == 1 else str(path.relative_to(root)),
+                "name": name,
                 "content": path.read_text(encoding="utf-8", errors="replace"),
             })
         except OSError as exc:

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile, stat, readdir } from "node:fs/promises";
-import { resolve, basename, dirname, relative } from "node:path";
+import { resolve, dirname, relative, sep } from "node:path";
 import process from "node:process";
 import { LEVELS, scanFiles, toSarif } from "./scanner.js";
 
@@ -72,6 +72,21 @@ async function findFiles(inputPath) {
   return found.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
+// Deepest common ancestor of every scan root. Report names are relative to
+// this root so same-basename files from different inputs stay distinguishable
+// (e.g. "skill-a/SKILL.md" vs "skill-b/SKILL.md" when scanning both dirs).
+function commonRoot(roots) {
+  let common = resolve(roots[0]);
+  for (const root of roots.slice(1)) {
+    while (root !== common && !root.startsWith(common + sep)) {
+      const parent = dirname(common);
+      if (parent === common) break; // filesystem root
+      common = parent;
+    }
+  }
+  return common;
+}
+
 // Return every non-option argument as an input path, skipping option values.
 function collectInputs(args) {
   const inputs = [];
@@ -121,10 +136,14 @@ async function main() {
   if (totalBytes > MAX_TOTAL_BYTES) {
     throw new Error(`scan total ${totalBytes} bytes exceeds the ${MAX_TOTAL_BYTES} byte limit`);
   }
+  // Names relative to the common root of all inputs: single-file scans keep
+  // the bare basename, single-directory scans keep in-tree paths, and
+  // multi-root scans stay collision-free even with same-named files.
+  const root = commonRoot(paths.map(({ root }) => root));
   const files = [];
-  for (const { path, root } of paths) {
+  for (const { path } of paths) {
     files.push({
-      name: paths.length === 1 ? basename(path) : relative(root, path),
+      name: relative(root, path),
       content: await readFile(path, "utf8"),
     });
   }

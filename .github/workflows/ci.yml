@@ -63,7 +63,15 @@ jobs:
           p = json.load(open(r'${{ runner.temp }}' + '/py.json'))
           for r in n['reports']: r.pop('scannedAt', None)
           for r in p['reports']: r.pop('scannedAt', None)
-          assert n == p, 'Node/Python outputs differ'
+          if n != p:
+              print('DIFF node files:', [r['file'] for r in n['reports']])
+              print('DIFF py files:  ', [r['file'] for r in p['reports']])
+              for a, b in zip(n['reports'], p['reports']):
+                  if a != b:
+                      print('DIFF report node:', json.dumps(a, ensure_ascii=False)[:1200])
+                      print('DIFF report py:  ', json.dumps(b, ensure_ascii=False)[:1200])
+                      break
+              raise SystemExit('Node/Python outputs differ')
           print('Node/Python outputs identical')
           "
 

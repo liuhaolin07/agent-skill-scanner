@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # GitHub Actions workflows — keep pinned action SHAs current
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  # npm metadata / scripts (the project itself is zero-dependency,
+  # but the manifest is still worth watching)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

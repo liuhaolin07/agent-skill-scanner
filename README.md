@@ -1,5 +1,9 @@
 # Agent Skill Scanner
 
+[![CI](https://github.com/liuhaolin07/agent-skill-scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/liuhaolin07/agent-skill-scanner/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/liuhaolin07/agent-skill-scanner/actions/workflows/codeql.yml/badge.svg)](https://github.com/liuhaolin07/agent-skill-scanner/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 一个零第三方依赖的静态安全扫描器，用于在安装前检查 `SKILL.md`、`skill.json`、MCP manifest 及相关 Markdown / JSON / YAML 文件。
 
 **双引擎 + 单一规则源**：Node 引擎（`src/scanner.js`，人审/CI/Web UI）与 Python 引擎（`src/scanner.py`，agent 零依赖调用）共享 `rules/scanner-rules.json`，规则只维护一份，两端输出完全一致（已验证 15 个技能目录 JSON 结构逐字节等价）。
@@ -51,6 +55,12 @@ python src/scanner.py ./my-skill --disable-rule SECRET_BROAD_ENV
 npm run scan -- ./my-skill --json
 ```
 
+一次扫描多个目录或文件（可混用）：报告中的文件名相对所有输入的公共根目录，即使两个目录里都有 `SKILL.md` 也不会混淆：
+
+```bash
+npm run scan -- ./skill-a ./skill-b --json   # 报告中显示 skill-a/SKILL.md 与 skill-b/SKILL.md
+```
+
 命令行退出码可直接用于 CI：
 
 | 退出码 | 风险等级 |
@@ -64,11 +74,11 @@ npm run scan -- ./my-skill --json
 ## 测试
 
 ```bash
-npm test        # Node 引擎（11 用例）
-python test/test_scanner.py  # Python 引擎（11 用例，对齐 Node）
-node --test test/corpus.test.js   # 回归基准（4 个 edge case 用例）
-python test/test_corpus.py        # 同一基准的 Python 侧
-npm run test:all  # 双端单元测试一起跑
+npm test        # Node 引擎全套（17 单元 + 4 回归 + 4 CLI = 25 用例）
+python test/test_scanner.py  # Python 引擎单元测试（17 用例，对齐 Node）
+python test/test_corpus.py   # 回归基准（同一 corpus，Python 侧）
+python test/test_cli.py      # CLI 级回归（多根路径命名、SARIF URI 等）
+npm run test:all  # 双端全套（Node 25 用例 + Python 22 用例）
 ```
 
 回归基准（`examples/corpus/`）锁定每个用例的预期规则命中，防止改规则时"修一个误报、引入两个漏报"。
@@ -86,14 +96,21 @@ npm run test:all  # 双端单元测试一起跑
 
 规则在 `rules/scanner-rules.json`（单一规则源），每个规则含 `id` / `category` / `severity` / `title` / `why` / `remediation` / `case_insensitive` / `patterns`。
 
-改完**必须**重新生成浏览器端规则并跑双端测试：
+改完**必须**校验结构、重新生成浏览器端规则并跑双端测试：
 
 ```bash
+npm run check:rules   # 校验规则文件结构（id 唯一、severity/category 合法、正则可编译；CI 也会跑）
 npm run build:rules   # 从 JSON 重新生成 rules/rules.js（网页端用，勿手改）
-npm run test:all      # Node 11 用例 + Python 11 用例
+npm run test:all      # 双端全套（Node 25 用例 + Python 22 用例）
 ```
 
+编写新规则的完整规范见 [docs/rule-authoring.md](docs/rule-authoring.md)（含历次误报教训：URL 路径段不算 shell、markdown 表格竖线、业务字段不算权限等）。
+
 Node/Python 引擎直接读 JSON；网页端（浏览器无文件系统）读 `rules/rules.js` 生成物，由 `scripts/sync-rules.mjs` 保证两者一致。
+
+## 参与贡献
+
+[CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)（漏洞报告走 GitHub Private Vulnerability Reporting）· [CHANGELOG.md](CHANGELOG.md) · [规则编写规范](docs/rule-authoring.md) · [规则 JSON Schema](rules/scanner-rules.schema.json)
 
 ## License
 

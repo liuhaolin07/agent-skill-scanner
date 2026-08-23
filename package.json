@@ -1,7 +1,6 @@
 {
   "name": "agent-skill-scanner",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.1",
   "type": "module",
   "description": "Static security scanner for Agent skills and MCP manifests",
   "license": "MIT",
@@ -11,8 +10,9 @@
     "scan:py": "python src/scanner.py",
     "build:rules": "node scripts/sync-rules.mjs",
     "test": "node --test",
-    "test:py": "python test/test_scanner.py",
-    "test:all": "node --test && python test/test_scanner.py"
+    "test:py": "python test/test_scanner.py && python test/test_corpus.py && python test/test_cli.py",
+    "test:all": "node --test && python test/test_scanner.py && python test/test_corpus.py && python test/test_cli.py",
+    "check:rules": "node scripts/check-schema.mjs"
   },
   "bin": {
     "skill-scan": "src/cli.js"

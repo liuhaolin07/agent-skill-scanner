@@ -31,6 +31,14 @@ npm start
 
 浏览器打开 `http://127.0.0.1:4173`。扫描完全在浏览器中完成；本地服务只提供静态页面，不接收或保存上传文件。
 
+## 安装
+
+```bash
+npm install -g @ryukorin/agent-skill-scanner
+```
+
+安装后直接使用 `skill-scan` 命令（或 `npx @ryukorin/agent-skill-scanner <path>` 免安装使用）。
+
 ## 命令行使用
 
 Node 引擎扫描单文件：

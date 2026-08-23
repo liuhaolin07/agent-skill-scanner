@@ -31,6 +31,14 @@ npm start
 
 Open `http://127.0.0.1:4173`. Scanning happens entirely in your browser — the local server only serves static files and never receives or stores uploads.
 
+## Install
+
+```bash
+npm install -g @ryukorin/agent-skill-scanner
+```
+
+You then get the `skill-scan` command (or use `npx @ryukorin/agent-skill-scanner <path>` without installing).
+
 ## CLI
 
 Node engine:

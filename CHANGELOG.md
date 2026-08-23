@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `scripts/corpus-stats.py` + `docs/corpus-stats.md` — real-world corpus
   statistics and false-positive analysis (Hermes skills + 数模 projects).
 - Corpus fixtures: `localhost-health-check`, `ssh-keygen`.
+- **Published on npm**: `@ryukorin/agent-skill-scanner` (`skill-scan` CLI,
+  `npm i -g @ryukorin/agent-skill-scanner`). The unscoped name
+  `agent-skill-scanner` is blocked by npm's similar-name protection against
+  the existing `agentskillscanner` package, so the scoped name is used.
 
 ### Fixed
 - SUSPICIOUS_URL no longer flags loopback URLs (`127.*`, `0.*`).

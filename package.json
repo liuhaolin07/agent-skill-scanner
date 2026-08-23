@@ -17,6 +17,16 @@
   "bin": {
     "skill-scan": "src/cli.js"
   },
+  "files": [
+    "src",
+    "rules",
+    "public",
+    "examples",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   }

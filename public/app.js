@@ -1,4 +1,4 @@
-import { scanFiles } from "/scanner.js";
+import { scanFiles } from "./scanner.js";
 
 const elements = Object.fromEntries([
   "dropzone", "file-input", "filename", "content", "line-count", "scan-button", "load-risky",

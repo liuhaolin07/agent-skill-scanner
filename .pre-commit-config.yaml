@@ -6,15 +6,13 @@ repos:
     hooks:
       - id: skill-scan-staged
         name: skill-scan (staged skill files)
-        entry: python src/scanner.py
+        # Gate on HIGH/CRITICAL only: --fail-on HIGH makes LOW/MEDIUM exit 0
+        # (pass) and HIGH/CRITICAL exit 2/3 (block the commit).
+        entry: python src/scanner.py --fail-on HIGH
         language: system
         types: [text]
         files: '\.(md|json|ya?ml)$'
         exclude: '^(README|LICENSE|rules/|test/|examples/)'
-        # Block only HIGH/CRITICAL: exit code 2/3 stops the commit.
-        # With --min-risk HIGH the scanner still exits 2/3 for HIGH+;
-        # LOW/MEDIUM exit 0/1, and pre-commit treats non-zero as failure,
-        # so we map exit codes: 0/1 pass, 2/3 fail via `fail_fast` semantics.
         fail_fast: false
         pass_filenames: true
       - id: rules-sync-check

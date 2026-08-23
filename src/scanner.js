@@ -1,6 +1,6 @@
 const LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
-export { LEVELS };
+export { LEVELS, maskSecrets };
 
 const SEVERITY_POINTS = {
   info: 0,
@@ -49,8 +49,8 @@ function maskSecrets(value) {
   return value
     .replace(/(-----BEGIN [^-]+ PRIVATE KEY-----).*/i, "$1 [REDACTED]")
     .replace(/((?:token|secret|password|api[_-]?key)\s*[:=]\s*)[^\s,"']+/gi, "$1[REDACTED]")
-    // JSON / YAML quoted values: "api_key": "secret-value"
-    .replace(/(["'](?:api[_-]?key|token|secret|password|authorization|auth|access[_-]?key|secret[_-]?key|client[_-]?secret)["']\s*[:=]\s*["'])[^"']+/gi, "$1[REDACTED]")
+    // JSON / YAML quoted values: "api_key": "secret-value", api_key: "secret-value"
+    .replace(/(["']?(?:api[_-]?key|token|secret|password|authorization|auth|access[_-]?key|secret[_-]?key|client[_-]?secret)["']?\s*[:=]\s*["'])[^"']+/gi, "$1[REDACTED]")
     // HTTP auth headers: Authorization: Bearer abc...
     .replace(/(authorization\s*:\s*(?:bearer|basic|token)\s+)[^\s,;]+/gi, "$1[REDACTED]")
     // GitHub PATs (ghp_/gho_/ghu_/ghs_/ghr_), AWS access keys, generic sk- tokens
@@ -195,7 +195,9 @@ function computeRisk(findings) {
 function validateInput(name, content) {
   if (typeof name !== "string" || !name.trim()) throw new TypeError("A file name is required.");
   if (typeof content !== "string") throw new TypeError("File content must be text.");
-  if (content.length > 2_000_000) throw new RangeError("File is larger than the 2 MB scan limit.");
+  // Byte-accurate limit (UTF-8), not character count — a CJK-heavy file can
+  // be 3 bytes/char.
+  if (Buffer.byteLength(content, "utf8") > 2_000_000) throw new RangeError("File is larger than the 2 MB scan limit.");
 }
 
 // Normalize Unicode (NFKC collapses lookalike/confusable characters) and drop

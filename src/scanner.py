@@ -118,9 +118,9 @@ def mask_secrets(value: str) -> str:
         value,
         flags=re.I,
     )
-    # JSON / YAML quoted values: "api_key": "secret-value"
+    # JSON / YAML quoted values: "api_key": "secret-value", api_key: "secret-value"
     value = re.sub(
-        r"([\"'](?:api[_-]?key|token|secret|password|authorization|auth|access[_-]?key|secret[_-]?key|client[_-]?secret)[\"']\s*[:=]\s*[\"'])[^\"']+",
+        r"([\"']?(?:api[_-]?key|token|secret|password|authorization|auth|access[_-]?key|secret[_-]?key|client[_-]?secret)[\"']?\s*[:=]\s*[\"'])[^\"']+",
         r"\1[REDACTED]",
         value,
         flags=re.I,
@@ -293,7 +293,7 @@ def validate_input(name: str, content: str) -> None:
         raise TypeError("A file name is required.")
     if not isinstance(content, str):
         raise TypeError("File content must be text.")
-    if len(content) > MAX_FILE_BYTES:
+    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
         raise ValueError(f"File is larger than the {MAX_FILE_BYTES // 1_000_000} MB scan limit.")
 
 
@@ -476,10 +476,15 @@ def _find_files(input_path: Path) -> list[tuple[Path, int]]:
     """Return [(path, byte_size), ...] sorted case-sensitively (Node-aligned).
 
     Skips vendored/VCS/build directories, enforces a per-file byte limit
-    before reading, and caps total files / total bytes per scan.
+    before reading, and hard-caps total files / total bytes per scan.
     """
     if input_path.is_file():
-        return [(input_path, input_path.stat().st_size)]
+        size = input_path.stat().st_size
+        if size > MAX_FILE_BYTES:
+            raise ValueError(
+                f'"{input_path}" is {size} bytes, exceeds the {MAX_FILE_BYTES} byte limit'
+            )
+        return [(input_path, size)]
 
     found: list[tuple[Path, int]] = []
     for p in input_path.rglob("*"):
@@ -498,7 +503,7 @@ def _find_files(input_path: Path) -> list[tuple[Path, int]]:
             break
     total = sum(s for _, s in found)
     if total > MAX_TOTAL_BYTES:
-        print(f"warning: total {total} bytes exceeds {MAX_TOTAL_BYTES} limit", file=sys.stderr)
+        raise ValueError(f"scan total {total} bytes exceeds the {MAX_TOTAL_BYTES} byte limit")
     # Sort case-sensitively on the raw string to match the Node engine's
     # Array.prototype.sort() (Windows Path.__lt__ is normcase-insensitive).
     return sorted(found, key=lambda item: str(item[0]))
@@ -529,22 +534,28 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("Exit codes: 0 LOW, 1 MEDIUM, 2 HIGH, 3 CRITICAL, 64 invalid input")
         return 0 if args else 64
 
-    inputs = [a for a in args if not a.startswith("-")]
+    inputs = _collect_inputs(args)
     if not inputs:
         print("Missing input path.", file=sys.stderr)
         return 64
-    root = Path(inputs[0])
-    if not root.exists():
-        print(f"Error: '{root}' does not exist", file=sys.stderr)
-        return 64
 
-    paths = _find_files(root)
+    paths: list[tuple[Path, int, Path]] = []
+    for raw_input in inputs:
+        root = Path(raw_input)
+        if not root.exists():
+            print(f"Error: '{root}' does not exist", file=sys.stderr)
+            return 64
+        try:
+            paths.extend((p, size, root) for p, size in _find_files(root))
+        except ValueError as exc:
+            print(f"Scan failed: {exc}", file=sys.stderr)
+            return 64
     if not paths:
         print("No Markdown, JSON, or YAML files found.", file=sys.stderr)
         return 64
 
     files = []
-    for path, _ in paths:
+    for path, _, root in paths:
         try:
             files.append({
                 "name": path.name if len(paths) == 1 else str(path.relative_to(root)),
@@ -574,6 +585,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             return EXIT_CODES[result["risk"]]
         return 0
     return EXIT_CODES.get(result["risk"], 64)
+
+
+def _collect_inputs(args: list[str]) -> list[str]:
+    """Return every non-option argument as an input path, skipping option values."""
+    value_options = {"--fail-on", "--disable-rule"}
+    inputs = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if not arg.startswith("-"):
+            inputs.append(arg)
+        elif arg in value_options and i + 1 < len(args):
+            i += 1  # skip the option's value
+        i += 1
+    return inputs
 
 
 def _fail_on_level(args: list[str]) -> Optional[str]:

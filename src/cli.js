@@ -16,8 +16,11 @@ const MAX_TOTAL_BYTES = 50_000_000; // per scan
 const MAX_FILES = 1_000; // per scan
 
 function usage() {
-  console.log(`Agent Skill Scanner\n\nUsage:\n  npm run scan -- <file-or-directory> [--json] [--sarif] [--fail-on LEVEL] [--disable-rule ID]\n  skill-scan <file-or-directory> [options]\n\nOptions:\n  --json            JSON report\n  --sarif           SARIF 2.1.0 report\n  --fail-on LEVEL   exit non-zero only if risk >= LEVEL (LOW|MEDIUM|HIGH|CRITICAL)\n  --disable-rule ID disable a rule (repeatable, comma-separated)\n\nExit codes: 0 LOW, 1 MEDIUM, 2 HIGH, 3 CRITICAL, 64 invalid input`);
+  console.log(`Agent Skill Scanner\n\nUsage:\n  npm run scan -- <path> [<path> ...] [--json] [--sarif] [--fail-on LEVEL] [--disable-rule ID]\n  skill-scan <path> [<path> ...] [options]\n\nOptions:\n  --json            JSON report\n  --sarif           SARIF 2.1.0 report\n  --fail-on LEVEL   exit non-zero only if risk >= LEVEL (LOW|MEDIUM|HIGH|CRITICAL)\n  --disable-rule ID disable a rule (repeatable, comma-separated)\n\nExit codes: 0 LOW, 1 MEDIUM, 2 HIGH, 3 CRITICAL, 64 invalid input`);
 }
+
+// Options that consume a following value (so the value is not treated as a path).
+const VALUE_OPTIONS = new Set(["--fail-on", "--disable-rule"]);
 
 // Parse --fail-on LEVEL; returns null when absent.
 function failOnLevel(args) {
@@ -34,7 +37,12 @@ function failOnLevel(args) {
 async function findFiles(inputPath) {
   const absolute = resolve(inputPath);
   const info = await stat(absolute);
-  if (info.isFile()) return [{ path: absolute, bytes: info.size }];
+  if (info.isFile()) {
+    if (info.size > MAX_FILE_BYTES) {
+      throw new Error(`"${inputPath}" is ${info.size} bytes, exceeds the ${MAX_FILE_BYTES} byte limit`);
+    }
+    return [{ path: absolute, root: absolute, bytes: info.size }];
+  }
   if (!info.isDirectory()) throw new Error("Input must be a file or directory.");
   const entries = await readdir(absolute, { withFileTypes: true, recursive: true });
   const found = [];
@@ -49,7 +57,7 @@ async function findFiles(inputPath) {
       console.error(`skip ${relative(absolute, path)}: ${size} bytes exceeds ${MAX_FILE_BYTES} limit`);
       continue;
     }
-    found.push({ path, bytes: size });
+    found.push({ path, root: absolute, bytes: size });
     if (found.length >= MAX_FILES) {
       console.error(`warning: file limit (${MAX_FILES}) reached; remaining files skipped`);
       break;
@@ -57,9 +65,23 @@ async function findFiles(inputPath) {
   }
   const total = found.reduce((sum, f) => sum + f.bytes, 0);
   if (total > MAX_TOTAL_BYTES) {
-    console.error(`warning: total ${total} bytes exceeds ${MAX_TOTAL_BYTES} limit`);
+    throw new Error(`scan total ${total} bytes exceeds the ${MAX_TOTAL_BYTES} byte limit`);
   }
   return found.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+// Return every non-option argument as an input path, skipping option values.
+function collectInputs(args) {
+  const inputs = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg.startsWith("-")) {
+      inputs.push(arg);
+      continue;
+    }
+    if (VALUE_OPTIONS.has(arg) && args[i + 1]) i += 1; // skip the option's value
+  }
+  return inputs;
 }
 
 function printHuman(result) {
@@ -83,15 +105,18 @@ async function main() {
     process.exitCode = args.length ? 0 : 64;
     return;
   }
-  const input = args.find((arg) => !arg.startsWith("-"));
-  if (!input) throw new Error("Missing input path.");
-  const paths = await findFiles(input);
+  const inputs = collectInputs(args);
+  if (!inputs.length) throw new Error("Missing input path.");
+  const paths = [];
+  for (const input of inputs) paths.push(...await findFiles(input));
   if (!paths.length) throw new Error("No Markdown, JSON, or YAML files found.");
-  const root = resolve(input);
-  const files = await Promise.all(paths.map(async ({ path }) => ({
-    name: paths.length === 1 ? basename(path) : relative(root, path),
-    content: await readFile(path, "utf8"),
-  })));
+  const files = [];
+  for (const { path, root } of paths) {
+    files.push({
+      name: paths.length === 1 ? basename(path) : relative(root, path),
+      content: await readFile(path, "utf8"),
+    });
+  }
   const result = scanFiles(files, { disabledRules: extractDisabled(args) });
   if (args.includes("--sarif")) {
     console.log(JSON.stringify(toSarif(result), null, 2));

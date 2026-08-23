@@ -64,13 +64,30 @@ jobs:
           for r in n['reports']: r.pop('scannedAt', None)
           for r in p['reports']: r.pop('scannedAt', None)
           if n != p:
-              print('DIFF node files:', [r['file'] for r in n['reports']])
-              print('DIFF py files:  ', [r['file'] for r in p['reports']])
-              for a, b in zip(n['reports'], p['reports']):
-                  if a != b:
-                      print('DIFF report node:', json.dumps(a, ensure_ascii=False)[:1200])
-                      print('DIFF report py:  ', json.dumps(b, ensure_ascii=False)[:1200])
-                      break
+              def first_diff(a, b, path='root'):
+                  if type(a) is not type(b):
+                      return f'{path}: type {type(a).__name__} vs {type(b).__name__}'
+                  if isinstance(a, dict):
+                      for k in a:
+                          if k not in b:
+                              return f'{path}.{k}: missing in py'
+                          r = first_diff(a[k], b[k], f'{path}.{k}')
+                          if r:
+                              return r
+                      for k in b:
+                          if k not in a:
+                              return f'{path}.{k}: missing in node'
+                  elif isinstance(a, list):
+                      if len(a) != len(b):
+                          return f'{path}: len {len(a)} vs {len(b)}'
+                      for i, (x, y) in enumerate(zip(a, b)):
+                          r = first_diff(x, y, f'{path}[{i}]')
+                          if r:
+                              return r
+                  elif a != b:
+                      return f'{path}: {a!r} vs {b!r}'
+                  return None
+              print('FIRST DIFF:', first_diff(n, p))
               raise SystemExit('Node/Python outputs differ')
           print('Node/Python outputs identical')
           "

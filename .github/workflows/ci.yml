@@ -52,15 +52,18 @@ jobs:
 
       - name: Cross-engine consistency (same output for a fixture set)
         # exit codes reflect the fixture risk (risky/ is CRITICAL by design);
-        # capture output regardless and compare the JSON only
+        # capture output regardless and compare the JSON only. Unique file
+        # names (run id + job index) avoid stale-file races in runner.temp.
         shell: bash
         run: |
-          node src/cli.js examples --json > "${{ runner.temp }}/node.json" || true
-          python src/scanner.py examples --json > "${{ runner.temp }}/py.json" || true
+          NF="${{ runner.temp }}/node-${{ github.run_id }}-${{ strategy.job-index }}.json"
+          PF="${{ runner.temp }}/py-${{ github.run_id }}-${{ strategy.job-index }}.json"
+          node src/cli.js examples --json > "$NF" || echo "node exit $?"
+          python src/scanner.py examples --json > "$PF" || echo "python exit $?"
           python -c "
-          import json
-          n = json.load(open(r'${{ runner.temp }}' + '/node.json'))
-          p = json.load(open(r'${{ runner.temp }}' + '/py.json'))
+          import json, os
+          nf = os.environ['NF']; pf = os.environ['PF']
+          n = json.load(open(nf)); p = json.load(open(pf))
           for r in n['reports']: r.pop('scannedAt', None)
           for r in p['reports']: r.pop('scannedAt', None)
           if n != p:
@@ -91,16 +94,21 @@ jobs:
               raise SystemExit('Node/Python outputs differ')
           print('Node/Python outputs identical')
           "
+        env:
+          NF: "${{ runner.temp }}/node-${{ github.run_id }}-${{ strategy.job-index }}.json"
+          PF: "${{ runner.temp }}/py-${{ github.run_id }}-${{ strategy.job-index }}.json"
 
       - name: Cross-engine SARIF consistency
         shell: bash
         run: |
-          node src/cli.js examples/risky --sarif > "${{ runner.temp }}/node-sarif.json" || true
-          python src/scanner.py examples/risky --sarif > "${{ runner.temp }}/py-sarif.json" || true
+          NS="${{ runner.temp }}/node-sarif-${{ github.run_id }}-${{ strategy.job-index }}.json"
+          PS="${{ runner.temp }}/py-sarif-${{ github.run_id }}-${{ strategy.job-index }}.json"
+          node src/cli.js examples/risky --sarif > "$NS" || echo "node exit $?"
+          python src/scanner.py examples/risky --sarif > "$PS" || echo "python exit $?"
           python -c "
-          import json
-          n = json.load(open(r'${{ runner.temp }}' + '/node-sarif.json'))
-          p = json.load(open(r'${{ runner.temp }}' + '/py-sarif.json'))
+          import json, os
+          ns = os.environ['NS']; ps = os.environ['PS']
+          n = json.load(open(ns)); p = json.load(open(ps))
           n_rules = sorted(r['id'] for r in n['runs'][0]['tool']['driver']['rules'])
           p_rules = sorted(r['id'] for r in p['runs'][0]['tool']['driver']['rules'])
           assert n_rules == p_rules, 'SARIF rules differ'
@@ -109,3 +117,6 @@ jobs:
           assert n_res == p_res, 'SARIF results differ'
           print('SARIF outputs identical')
           "
+        env:
+          NS: "${{ runner.temp }}/node-sarif-${{ github.run_id }}-${{ strategy.job-index }}.json"
+          PS: "${{ runner.temp }}/py-sarif-${{ github.run_id }}-${{ strategy.job-index }}.json"

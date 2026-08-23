@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="在安装 Agent Skill 或 MCP Server 前，静态检查敏感权限与可疑行为。">
+  <title>Agent Skill Scanner</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Agent Skill Scanner 首页">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><path d="M16 2 28 8.7v8.6C28 24 23 29 16 30 9 29 4 24 4 17.3V8.7L16 2Z"/><path d="m10.5 16 3.4 3.4 7.7-7.8"/></svg>
+        </span>
+        <span>Agent Skill Scanner</span>
+      </a>
+      <div class="local-pill"><span></span> 100% 本地分析</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">PRE-INSTALL SECURITY CHECK</div>
+        <h1>先扫描，再信任。</h1>
+        <p>检查 Agent Skill 与 MCP 配置中的敏感文件访问、外网请求、Shell 执行、Memory 修改和过大权限。文件不会离开你的浏览器。</p>
+      </section>
+
+      <section class="scanner-grid">
+        <div class="input-panel panel">
+          <div class="panel-head">
+            <div>
+              <span class="step">01</span>
+              <h2>添加待扫描内容</h2>
+            </div>
+            <button class="text-button" id="load-risky" type="button">载入风险示例</button>
+          </div>
+
+          <label class="dropzone" id="dropzone" for="file-input" tabindex="0">
+            <input id="file-input" type="file" accept=".md,.json,.yaml,.yml" multiple hidden>
+            <span class="upload-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v4h14v-4"/></svg>
+            </span>
+            <strong>拖入 SKILL.md 或 manifest</strong>
+            <span>也可以点击选择 · 单文件最大 2 MB</span>
+          </label>
+
+          <div class="or"><span>或粘贴内容</span></div>
+          <div class="editor-wrap">
+            <div class="editor-bar">
+              <input id="filename" value="SKILL.md" aria-label="文件名" spellcheck="false">
+              <span id="line-count">1 line</span>
+            </div>
+            <textarea id="content" spellcheck="false" placeholder="# My Agent Skill&#10;&#10;Describe tools, permissions and instructions here..."></textarea>
+          </div>
+          <button class="scan-button" id="scan-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+            开始安全扫描
+          </button>
+          <p class="privacy-note"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>静态分析，不执行代码，不发起网络请求</p>
+        </div>
+
+        <div class="result-panel panel" id="result-panel" aria-live="polite">
+          <div class="panel-head">
+            <div><span class="step">02</span><h2>扫描报告</h2></div>
+            <button class="icon-button" id="copy-report" type="button" title="复制 JSON 报告" disabled>
+              <svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+            </button>
+          </div>
+          <div class="empty-state" id="empty-state">
+            <div class="radar">
+              <span></span><span></span><span></span>
+              <i></i>
+            </div>
+            <strong>等待扫描</strong>
+            <p>结果会按六个安全维度展示，并给出可定位到行的修复建议。</p>
+          </div>
+          <div class="report hidden" id="report">
+            <div class="risk-hero" id="risk-hero">
+              <div class="score-ring"><span id="score">0</span><small>/100</small></div>
+              <div><span class="risk-label" id="risk-label">LOW</span><h3 id="risk-title">风险较低</h3><p id="risk-summary"></p></div>
+            </div>
+            <div class="category-list" id="category-list"></div>
+            <div class="findings-head"><h3>详细发现</h3><span id="finding-count">0 项</span></div>
+            <div class="findings" id="findings"></div>
+            <p class="disclaimer" id="disclaimer"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="checks">
+        <div class="section-title"><span>覆盖范围</span><h2>一个报告，六个安全维度</h2></div>
+        <div class="check-grid">
+          <article><span>01</span><h3>Secrets</h3><p>.env、SSH Key 与全量环境变量读取</p></article>
+          <article><span>02</span><h3>Network</h3><p>外部请求、通配域名与不必要的出口访问</p></article>
+          <article><span>03</span><h3>Shell</h3><p>命令执行、子进程与脚本解释器调用</p></article>
+          <article><span>04</span><h3>Memory</h3><p>长期记忆、用户偏好与持久状态修改</p></article>
+          <article><span>05</span><h3>Permissions</h3><p>管理员权限、全盘访问与危险系统能力</p></article>
+          <article><span>06</span><h3>Supply chain</h3><p>可疑 URL、远程下载与管道执行</p></article>
+        </div>
+      </section>
+    </main>
+    <footer><span>Agent Skill Scanner · Static heuristic analysis</span><span>规则不是沙箱，安装前仍需人工复核</span></footer>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

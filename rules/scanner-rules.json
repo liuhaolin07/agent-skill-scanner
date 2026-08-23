@@ -1,0 +1,190 @@
+[
+  {
+    "id": "SECRET_ENV_FILE",
+    "category": "secret_access",
+    "severity": "high",
+    "title": "Reads environment secret files",
+    "why": "Environment files commonly contain API keys and credentials.",
+    "remediation": "Request only named environment variables and never read .env files directly.",
+    "case_insensitive": true,
+    "patterns": [
+      "(?:read|open|load|source|cat|get-content|type)\\s*(?:\\([^)]*)?[\"'`]?[^\\n]*\\.env(?:\\b|[\"'`])",
+      "(?:^|[\\\\/])\\.env(?:\\.[\\w-]+)?\\b",
+      "dotenv(?:\\.config|\\s+run)?"
+    ]
+  },
+  {
+    "id": "SECRET_SSH_KEY",
+    "category": "secret_access",
+    "severity": "critical",
+    "title": "Accesses SSH credentials",
+    "why": "SSH private keys can grant direct access to remote systems.",
+    "remediation": "Remove SSH key access. Use a narrowly scoped connector or ephemeral credential instead.",
+    "case_insensitive": true,
+    "patterns": [
+      "(?:\\.ssh[\\\\/]|id_(?:rsa|dsa|ecdsa|ed25519)|authorized_keys|known_hosts)",
+      "-----BEGIN (?:OPENSSH|RSA|EC|DSA) PRIVATE KEY-----",
+      "SSH_AUTH_SOCK|ssh-add\\b"
+    ]
+  },
+  {
+    "id": "SECRET_BROAD_ENV",
+    "category": "secret_access",
+    "severity": "medium",
+    "title": "Reads the process environment",
+    "why": "Enumerating the full process environment may expose unrelated credentials.",
+    "remediation": "Read only explicitly named variables required by the skill.",
+    "case_insensitive": true,
+    "patterns": [
+      "(?:printenv|Get-ChildItem\\s+Env:|set\\s*$)",
+      "(?:Object\\.keys|JSON\\.stringify|console\\.log)\\s*\\(\\s*process\\.env",
+      "(?:os\\.environ\\b(?!\\s*\\[)|env\\s*:\\s*\\*)"
+    ]
+  },
+  {
+    "id": "SHELL_EXECUTION",
+    "category": "shell_execution",
+    "severity": "high",
+    "title": "Executes shell commands",
+    "why": "Shell execution can modify the machine or run attacker-controlled arguments.",
+    "remediation": "Replace shell calls with a constrained API and validate every argument.",
+    "case_insensitive": true,
+    "patterns": [
+      "(?:child_process|execSync|spawnSync|shelljs|(?:^|[^/\\w])zx\\b)",
+      "(?:subprocess\\.(?:run|Popen|call)|os\\.system|shell\\s*=\\s*True)",
+      "(?:bash|sh|zsh|cmd(?:\\.exe)?|powershell(?:\\.exe)?|pwsh)\\s+(?:-c|-Command|\\/c)\\b",
+      "(?:run_shell|shell_exec|execute_command|exec_command)",
+      "[\"']?command[\"']?\\s*:\\s*[\"'][^\"'\\n]+[\"']",
+      "^\\s*command\\s*:\\s*\\S+"
+    ]
+  },
+  {
+    "id": "DOWNLOAD_EXECUTE",
+    "category": "suspicious_download",
+    "severity": "critical",
+    "title": "Downloads and immediately executes content",
+    "why": "Piping remote content into an interpreter is a common supply-chain attack technique.",
+    "remediation": "Pin a reviewed artifact, verify its checksum, and never pipe downloads to a shell.",
+    "case_insensitive": true,
+    "patterns": [
+      "(?:curl|wget)[^\\n|;&]{0,300}(?:\\||\\|&)\\s*(?:ba)?sh\\b",
+      "Invoke-(?:WebRequest|RestMethod)[^\\n|;&]{0,300}\\|[^\\n]*(?:iex|Invoke-Expression)",
+      "(?:certutil|bitsadmin)[^\\n]{0,300}(?:&&|;|\\|)[^\\n]*(?:start|exec|call|powershell|cmd)",
+      "(?:base64\\s+(?:-d|--decode)|FromBase64String)[^\\n]{0,300}(?:\\||iex|exec|eval)"
+    ]
+  },
+  {
+    "id": "DOWNLOAD_COMMAND",
+    "category": "suspicious_download",
+    "severity": "high",
+    "title": "Contains a download command",
+    "why": "Remote downloads introduce mutable code or data into the skill's trust boundary.",
+    "remediation": "Document why the download is needed, restrict the host, and verify integrity.",
+    "case_insensitive": true,
+    "patterns": [
+      "\\b(?:curl|wget)\\b[^\\n]*(?:https?:\\/\\/|-O\\b|-o\\b)",
+      "\\bInvoke-(?:WebRequest|RestMethod)\\b",
+      "\\b(?:certutil\\s+-urlcache|bitsadmin\\s+\\/transfer)\\b",
+      "\\b(?:downloadFile|urlretrieve)\\s*\\("
+    ]
+  },
+  {
+    "id": "SUSPICIOUS_URL",
+    "category": "suspicious_download",
+    "severity": "high",
+    "title": "References a suspicious URL",
+    "why": "Raw IPs, URL shorteners, tunnels, and paste sites make provenance hard to verify.",
+    "remediation": "Use a stable HTTPS domain owned by the service and document its purpose.",
+    "case_insensitive": true,
+    "patterns": [
+      "https?:\\/\\/(?:\\d{1,3}\\.){3}\\d{1,3}(?::\\d+)?\\b",
+      "https?:\\/\\/(?:bit\\.ly|tinyurl\\.com|t\\.co|is\\.gd|ngrok(?:-free)?\\.app|pastebin\\.com|paste\\.ee|transfer\\.sh|0x0\\.st)\\b",
+      "https?:\\/\\/(?:raw\\.githubusercontent\\.com|gist\\.githubusercontent\\.com)\\b",
+      "\\b(?:data|javascript):[^\\s\"']+"
+    ]
+  },
+  {
+    "id": "NETWORK_UNRESTRICTED",
+    "category": "network_access",
+    "severity": "high",
+    "title": "Requests unrestricted network access",
+    "why": "Wildcard egress can send data to arbitrary destinations.",
+    "remediation": "Allowlist the exact HTTPS hosts required by the skill.",
+    "case_insensitive": true,
+    "patterns": [
+      "(?:network|domains?|hosts?|egress|connect-src)[\"'\\s]*[:=][^\\n]{0,120}(?:\\*|all|any|0\\.0\\.0\\.0\\/0)",
+      "https?:\\/\\/\\*|\\*\\.\\*"
+    ]
+  },
+  {
+    "id": "NETWORK_ACCESS",
+    "category": "network_access",
+    "severity": "medium",
+    "title": "Performs external network access",
+    "why": "External requests may disclose local content and create a supply-chain dependency.",
+    "remediation": "Document the purpose and allowlist only the required hosts.",
+    "case_insensitive": true,
+    "patterns": [
+      "\\b(?:fetch|axios\\.(?:get|post|request)|requests?\\.(?:get|post|put|delete)|httpx\\.|urllib\\.request|net\\.Dial)\\s*\\(",
+      "\\b(?:WebSocket|EventSource)\\s*\\(",
+      "https?:\\/\\/[a-z0-9.-]+(?::\\d+)?(?:\\/[^\\s\"'`)>,]*)?"
+    ]
+  },
+  {
+    "id": "MEMORY_MODIFICATION",
+    "category": "memory_modification",
+    "severity": "high",
+    "title": "Modifies persistent agent memory",
+    "why": "Persistent memory changes can influence later tasks outside this scan.",
+    "remediation": "Require explicit user confirmation and restrict writes to a documented memory file.",
+    "case_insensitive": true,
+    "patterns": [
+      "(?:write|append|update|edit|modify|save)[^\\n]{0,100}(?:MEMORY\\.md|memory\\.md|agent memory|persistent memory)",
+      "(?:MEMORY\\.md|memory\\.md)[^\\n]{0,100}(?:write|append|update|edit|modify|save)",
+      "(?:store|remember|persist)[^\\n]{0,80}(?:user preference|conversation|instruction|credential|secret)",
+      "(?:memory_write|update_memory|save_memory|remember_user)"
+    ]
+  },
+  {
+    "id": "PRIVILEGE_ESCALATION",
+    "category": "excessive_permissions",
+    "severity": "critical",
+    "title": "Requests elevated system privileges",
+    "why": "Administrator or privileged execution can bypass normal isolation controls.",
+    "remediation": "Remove elevation and grant only the narrow capability required.",
+    "case_insensitive": true,
+    "patterns": [
+      "\\b(?:sudo\\s+|runas\\s+\\/user:administrator|Start-Process[^\\n]*-Verb\\s+RunAs)",
+      "(?:--privileged|[\"']?privileged[\"']?\\s*:\\s*true|CAP_SYS_ADMIN|\\/var\\/run\\/docker\\.sock)",
+      "(?:administrator|root)\\s+(?:access|permission|privilege)"
+    ]
+  },
+  {
+    "id": "FILESYSTEM_BROAD",
+    "category": "excessive_permissions",
+    "severity": "high",
+    "title": "Requests broad filesystem access",
+    "why": "Home- or root-wide access exceeds the needs of most skills.",
+    "remediation": "Restrict reads and writes to the workspace or a specific data directory.",
+    "case_insensitive": true,
+    "patterns": [
+      "[\"']?(?:filesystem|read|write|path|allowed_directories)[\"'\\s]*[:=][^\\n]{0,120}(?:[\"']\\/[\"']|~\\/|\\$HOME|%USERPROFILE%|C:\\\\\\\\Users\\\\\\\\\\*)",
+      "(?:read|write)[_-]?(?:all|any)|full[_ -]?disk[_ -]?access",
+      "[\"']?(?:permissions?|scope)[\"']?\\s*[:=]\\s*[\"']?(?:\\*|unrestricted|\\ball\\b|\\bany\\b|0\\.0\\.0\\.0\\/0)[\"']?"
+    ]
+  },
+  {
+    "id": "DESTRUCTIVE_COMMAND",
+    "category": "excessive_permissions",
+    "severity": "critical",
+    "title": "Contains a destructive system command",
+    "why": "The command can recursively delete data or alter sensitive system state.",
+    "remediation": "Remove destructive commands or constrain them to a validated temporary path with confirmation.",
+    "case_insensitive": true,
+    "patterns": [
+      "\\brm\\s+-[a-z]*r[a-z]*f[a-z]*\\s+(?:\\/|~|\\$HOME|\\*)",
+      "\\bRemove-Item\\b[^\\n]*(?:-Recurse[^\\n]*-Force|-Force[^\\n]*-Recurse)",
+      "\\b(?:mkfs\\.|format\\s+[a-z]:|diskpart\\b|dd\\s+if=.*\\s+of=\\/dev\\/)"
+    ]
+  }
+]

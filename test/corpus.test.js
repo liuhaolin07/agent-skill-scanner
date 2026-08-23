@@ -27,6 +27,16 @@ const CORPUS = {
     risk: "CRITICAL",
     findings: ["SECRET_ENV_FILE", "SECRET_SSH_KEY", "SHELL_EXECUTION", "DOWNLOAD_EXECUTE", "DOWNLOAD_COMMAND", "SUSPICIOUS_URL", "URL_REFERENCE", "MEMORY_MODIFICATION"],
   },
+  // Localhost health checks must not trip SUSPICIOUS_URL (raw-IP rule).
+  "localhost-health-check": {
+    risk: "LOW",
+    findings: ["URL_REFERENCE"],
+  },
+  // ssh-keygen / public keys are key *generation*, not secret access.
+  "ssh-keygen": {
+    risk: "LOW",
+    findings: [],
+  },
 };
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -15,6 +15,9 @@ const isNode = typeof process !== "undefined" && !!process.versions?.node;
 const compile = (rule) => ({
   ...rule,
   patterns: rule.patterns.map((source) => new RegExp(source, rule.case_insensitive ? "i" : "")),
+  // Optional negative patterns: an evidence line matching any of these is not
+  // reported (used to suppress well-understood false positives, e.g. ssh-keygen).
+  exclude: (rule.exclude_patterns || []).map((source) => new RegExp(source, rule.case_insensitive ? "i" : "")),
 });
 
 // Node (CLI/CI): read the JSON source of truth from disk.
@@ -67,6 +70,9 @@ function collectMatches(text, rule) {
   lines.push(...buildFrontmatterSupplement(text));
   for (const logical of lines) {
     if (rule.patterns.some((pattern) => pattern.test(logical.text))) {
+      // Exclusion wins: a line that matches an exclude_pattern is a known
+      // benign context (key generation, localhost health checks, ...).
+      if (rule.exclude.some((pattern) => pattern.test(logical.text))) continue;
       evidence.push({
         line: logical.line,
         excerpt: maskSecrets(excerpt(logical.text)),

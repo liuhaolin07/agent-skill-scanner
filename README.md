@@ -21,7 +21,9 @@
 
 ## 网页使用
 
-需要 Node.js 20 或更新版本：
+**在线演示**：[https://liuhaolin07.github.io/agent-skill-scanner/](https://liuhaolin07.github.io/agent-skill-scanner/)（GitHub Pages，无需本地环境）
+
+本地运行需要 Node.js 20 或更新版本：
 
 ```bash
 npm start

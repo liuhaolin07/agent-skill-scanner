@@ -6,6 +6,22 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `exclude_patterns` support in both engines: optional negative regexes per
+  rule; an evidence line matching any of them is not reported (suppresses
+  well-understood false positives). Validated by `npm run check:rules`.
+- `scripts/corpus-stats.py` + `docs/corpus-stats.md` — real-world corpus
+  statistics and false-positive analysis (Hermes skills + 数模 projects).
+- Corpus fixtures: `localhost-health-check`, `ssh-keygen`.
+
+### Fixed
+- SUSPICIOUS_URL no longer flags loopback URLs (`127.*`, `0.*`).
+- SECRET_SSH_KEY no longer flags key generation (`ssh-keygen`), public keys
+  (`*.pub`), or `.ssh/config` references.
+- GitHub Pages deployment for the web demo
+  (https://liuhaolin07.github.io/agent-skill-scanner/); web assets now use
+  relative paths.
+
 ## [0.2.1] - 2026-08-23
 
 ### Fixed

@@ -71,6 +71,23 @@ if (!Array.isArray(rules)) {
         }
       });
     }
+    if (rule.exclude_patterns !== undefined) {
+      if (!Array.isArray(rule.exclude_patterns)) {
+        errors.push(`${at}: 'exclude_patterns' must be an array`);
+      } else {
+        rule.exclude_patterns.forEach((pattern, j) => {
+          if (typeof pattern !== "string") {
+            errors.push(`${at}.exclude_patterns[${j}]: must be a string`);
+            return;
+          }
+          try {
+            new RegExp(pattern);
+          } catch (error) {
+            errors.push(`${at}.exclude_patterns[${j}]: invalid regex (${error.message})`);
+          }
+        });
+      }
+    }
   });
 }
 

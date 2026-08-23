@@ -21,7 +21,9 @@ Output is a `LOW / MEDIUM / HIGH / CRITICAL` risk level with a 0-100 score. Ever
 
 ## Web UI
 
-Requires Node.js 20+:
+**Live demo**: [https://liuhaolin07.github.io/agent-skill-scanner/](https://liuhaolin07.github.io/agent-skill-scanner/) (GitHub Pages, no local setup needed)
+
+Requires Node.js 20+ for local use:
 
 ```bash
 npm start

@@ -27,6 +27,11 @@ export const RULES_DATA = [
       "(?:\\.ssh[\\\\/]|id_(?:rsa|dsa|ecdsa|ed25519)|authorized_keys|known_hosts)",
       "-----BEGIN (?:OPENSSH|RSA|EC|DSA) PRIVATE KEY-----",
       "SSH_AUTH_SOCK|ssh-add\\b"
+    ],
+    "exclude_patterns": [
+      "ssh-keygen\\b",
+      "\\.pub\\b",
+      "\\.ssh[\\\\/]config\\b"
     ]
   },
   {
@@ -105,7 +110,7 @@ export const RULES_DATA = [
     "remediation": "Use a stable HTTPS domain owned by the service and document its purpose.",
     "case_insensitive": true,
     "patterns": [
-      "https?:\\/\\/(?:\\d{1,3}\\.){3}\\d{1,3}(?::\\d+)?\\b",
+      "https?:\\/\\/(?!127\\.)(?!0\\.)(?:\\d{1,3}\\.){3}\\d{1,3}(?:\\:\\d+)?\\b",
       "https?:\\/\\/(?:bit\\.ly|tinyurl\\.com|t\\.co|is\\.gd|ngrok(?:-free)?\\.app|pastebin\\.com|paste\\.ee|transfer\\.sh|0x0\\.st)\\b",
       "https?:\\/\\/(?:raw\\.githubusercontent\\.com|gist\\.githubusercontent\\.com)\\b",
       "\\b(?:data|javascript):[^\\s\"']+"

@@ -54,6 +54,7 @@ class Rule:
     remediation: str
     patterns: list = field(default_factory=list)  # compiled regexes
     supersedes: list = field(default_factory=list)  # rule IDs not double-scored
+    exclude: list = field(default_factory=list)  # compiled negative regexes
 
 
 def _load_rules() -> list[Rule]:
@@ -68,6 +69,12 @@ def _load_rules() -> list[Rule]:
                 compiled.append(re.compile(source, flags))
             except re.error as exc:
                 raise ValueError(f"Bad regex in rule {entry['id']}: {source!r} -> {exc}") from exc
+        excluded = []
+        for source in entry.get("exclude_patterns", []):
+            try:
+                excluded.append(re.compile(source, flags))
+            except re.error as exc:
+                raise ValueError(f"Bad exclude_patterns regex in rule {entry['id']}: {source!r} -> {exc}") from exc
         rules.append(Rule(
             id=entry["id"],
             category=entry["category"],
@@ -77,6 +84,7 @@ def _load_rules() -> list[Rule]:
             remediation=entry["remediation"],
             patterns=compiled,
             supersedes=list(entry.get("supersedes", [])),
+            exclude=excluded,
         ))
     return rules
 
@@ -199,6 +207,10 @@ def collect_matches(text: str, rule: Rule, max_evidence: int = 3) -> list[Eviden
     lines.extend(build_frontmatter_supplement(text))
     for line_no, logical_text in lines:
         if any(pattern.search(logical_text) for pattern in rule.patterns):
+            # Exclusion wins: a line matching an exclude_pattern is a known
+            # benign context (key generation, localhost health checks, ...).
+            if any(pattern.search(logical_text) for pattern in rule.exclude):
+                continue
             evidence.append(Evidence(line=line_no, excerpt=mask_secrets(excerpt(logical_text))))
             if len(evidence) == max_evidence:
                 break

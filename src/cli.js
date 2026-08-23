@@ -115,6 +115,16 @@ function printHuman(result) {
   }
 }
 
+// Machine-readable output must be locale-independent: escape every non-ASCII
+// code unit as \uXXXX (mirroring Python's json.dumps(ensure_ascii=True)), so
+// reports are byte-identical across platforms — a raw em-dash would otherwise
+// be encoded differently by cp1252/GBK consoles on Windows.
+function jsonStringify(value) {
+  return JSON.stringify(value, null, 2).replace(/[\u007f-\uffff]/g, (ch) =>
+    `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (!args.length || args.includes("--help") || args.includes("-h")) {
@@ -149,8 +159,8 @@ async function main() {
   }
   const result = scanFiles(files, { disabledRules: extractDisabled(args) });
   if (args.includes("--sarif")) {
-    console.log(JSON.stringify(toSarif(result), null, 2));
-  } else if (args.includes("--json")) console.log(JSON.stringify(result, null, 2));
+    console.log(jsonStringify(toSarif(result)));
+  } else if (args.includes("--json")) console.log(jsonStringify(result));
   else printHuman(result);
   const failOn = failOnLevel(args);
   if (failOn) {

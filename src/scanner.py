@@ -610,10 +610,18 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     result = scan_files(files, disabled_rules=_extract_disabled(args))
 
+    # Machine-readable output must be locale-independent: force UTF-8 + LF on
+    # the stream and emit \uXXXX-escaped JSON (like the Node engine), so
+    # reports are byte-identical across platforms and survive cp1252/GBK
+    # consoles (Windows text mode would otherwise translate \n to \r\n).
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+    except Exception:
+        pass
     if "--sarif" in args:
-        print(json.dumps(to_sarif(result), indent=2, ensure_ascii=False))
+        print(json.dumps(to_sarif(result), indent=2))
     elif "--json" in args:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        print(json.dumps(result, indent=2))
     else:
         _print_human(result)
 

@@ -83,3 +83,13 @@ test("cli: single-file scan reports its basename", () => {
     rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("cli: JSON output is pure ASCII (locale-independent)", () => {
+  // UNPINNED_PACKAGE's `why` contains an em-dash; the report must escape it
+  // as \\u2014 so output stays byte-identical on cp1252/GBK Windows consoles.
+  const fixture = join(here, "..", "examples", "corpus", "frontmatter-wildcard");
+  const res = spawnSync(process.execPath, [cli, fixture, "--json"], { encoding: "utf8" });
+  assert.ok(res.status >= 0 && res.status <= 3, `cli failed (${res.status}): ${res.stderr}`);
+  assert.ok(/^[\x00-\x7f]*$/.test(res.stdout), "JSON output must be pure ASCII");
+  assert.ok(res.stdout.includes("\\u2014"), "em-dash must be escaped as \\u2014");
+});

@@ -275,6 +275,7 @@ const SARIF_LEVEL = { critical: "error", high: "error", medium: "warning", low: 
 
 export function toSarif(result, { toolName = "agent-skill-scanner", toolVersion = "1.0.0" } = {}) {
   const ruleIds = [...new Set(result.reports.flatMap((r) => r.findings.map((f) => f.id)))];
+  ruleIds.sort(); // alphabetical, matching the Python engine (byte-identical SARIF)
   const rules = ruleIds.map((id) => {
     const sample = result.reports.flatMap((r) => r.findings).find((f) => f.id === id);
     return {
@@ -283,7 +284,7 @@ export function toSarif(result, { toolName = "agent-skill-scanner", toolVersion 
       shortDescription: { text: sample?.title || id },
       fullDescription: { text: sample?.why || "" },
       help: { text: sample?.remediation || "", markdown: `**Fix:** ${sample?.remediation || ""}` },
-      properties: { category: sample?.category || "", "security-severity": String(SARIF_LEVEL[sample?.severity] === "error" ? 9.0 : SARIF_LEVEL[sample?.severity] === "warning" ? 5.0 : 2.0) },
+      properties: { category: sample?.category || "", "security-severity": SARIF_LEVEL[sample?.severity] === "error" ? "9.0" : SARIF_LEVEL[sample?.severity] === "warning" ? "5.0" : "2.0" },
     };
   });
 

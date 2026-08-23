@@ -63,7 +63,7 @@ jobs:
           python -c "
           import json, os
           nf = os.environ['NF']; pf = os.environ['PF']
-          n = json.load(open(nf)); p = json.load(open(pf))
+          n = json.load(open(nf, encoding='utf-8')); p = json.load(open(pf, encoding='utf-8'))
           for r in n['reports']: r.pop('scannedAt', None)
           for r in p['reports']: r.pop('scannedAt', None)
           if n != p:

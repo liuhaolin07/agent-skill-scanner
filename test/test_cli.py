@@ -96,6 +96,18 @@ class TestCli(unittest.TestCase):
             import shutil
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_json_output_pure_ascii(self):
+        # UNPINNED_PACKAGE's `why` contains an em-dash; the report must escape
+        # it as \\u2014 so output stays byte-identical on cp1252/GBK consoles.
+        fixture = Path(__file__).resolve().parent.parent / "examples" / "corpus" / "frontmatter-wildcard"
+        res = subprocess.run(
+            [sys.executable, str(SRC), str(fixture), "--json"],
+            capture_output=True, text=True,
+        )
+        self.assertIn(res.returncode, (0, 1, 2, 3), res.stderr)
+        self.assertTrue(all(ord(c) < 128 for c in res.stdout), "JSON output must be pure ASCII")
+        self.assertIn("\\u2014", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

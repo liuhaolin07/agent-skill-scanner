@@ -120,3 +120,14 @@ jobs:
         env:
           NS: "${{ runner.temp }}/node-sarif-${{ github.run_id }}-${{ strategy.job-index }}.json"
           PS: "${{ runner.temp }}/py-sarif-${{ github.run_id }}-${{ strategy.job-index }}.json"
+
+  # Aggregate gate for branch protection: matrix job contexts carry
+  # per-variant names ("test (os, node, py)") that cannot be listed in
+  # required status checks, so PRs would stay blocked forever. This single
+  # non-matrix job is the required check instead.
+  verify:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: All matrix jobs passed
+        run: echo "All matrix test variants passed."

@@ -69,10 +69,11 @@ test("multi-file result uses the highest risk", () => {
   assert.equal(result.fileCount, 2);
 });
 
-test("redaction: JSON quoted key", () => {
-  const r = scanText("SKILL.md", '{"api_key": "json-secret-123"}');
-  const ev = r.findings.flatMap((f) => f.evidence.map((e) => e.excerpt)).join("\n");
-  assert(!ev.includes("json-secret-123"));
+test("redaction: JSON quoted key", async () => {
+  const { maskSecrets } = await import("../src/scanner.js");
+  const out = maskSecrets('{"api_key": "json-secret-123"}');
+  assert(!out.includes("json-secret-123"));
+  assert(out.includes("[REDACTED]"));
 });
 
 test("redaction: YAML bare key with quoted value", async () => {
@@ -82,23 +83,26 @@ test("redaction: YAML bare key with quoted value", async () => {
   assert(out.includes("[REDACTED]"));
 });
 
-test("redaction: Authorization Bearer header", () => {
-  const r = scanText("SKILL.md", "Authorization: Bearer abcdefghijklmnop");
-  const ev = r.findings.flatMap((f) => f.evidence.map((e) => e.excerpt)).join("\n");
-  assert(!ev.includes("abcdefghijklmnop"));
+test("redaction: Authorization Bearer header", async () => {
+  const { maskSecrets } = await import("../src/scanner.js");
+  const out = maskSecrets("Authorization: Bearer abcdefghijklmnop");
+  assert(!out.includes("abcdefghijklmnop"));
+  assert(out.includes("[REDACTED]"));
 });
 
-test("redaction: GitHub PAT and AWS key", () => {
-  const r = scanText("SKILL.md", "ghp_1234567890ABCDEFGHIJKL and AKIAIOSFODNN7EXAMPLE");
-  const ev = r.findings.flatMap((f) => f.evidence.map((e) => e.excerpt)).join("\n");
-  assert(!ev.includes("ghp_1234567890ABCDEFGHIJKL"));
-  assert(!ev.includes("AKIAIOSFODNN7EXAMPLE"));
+test("redaction: GitHub PAT and AWS key", async () => {
+  const { maskSecrets } = await import("../src/scanner.js");
+  const out = maskSecrets("ghp_1234567890ABCDEFGHIJKL and AKIAIOSFODNN7EXAMPLE");
+  assert(!out.includes("ghp_1234567890ABCDEFGHIJKL"));
+  assert(!out.includes("AKIAIOSFODNN7EXAMPLE"));
+  assert(out.includes("[REDACTED]"));
 });
 
-test("redaction: URL query credentials", () => {
-  const r = scanText("SKILL.md", "https://api.example.com/data?token=urlsecret99&id=5");
-  const ev = r.findings.flatMap((f) => f.evidence.map((e) => e.excerpt)).join("\n");
-  assert(!ev.includes("urlsecret99"));
+test("redaction: URL query credentials", async () => {
+  const { maskSecrets } = await import("../src/scanner.js");
+  const out = maskSecrets("https://api.example.com/data?token=urlsecret99&id=5");
+  assert(!out.includes("urlsecret99"));
+  assert(out.includes("[REDACTED]"));
 });
 
 test("superseded findings are shown but not double-scored", () => {

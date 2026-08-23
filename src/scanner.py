@@ -541,17 +541,38 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     paths: list[tuple[Path, int, Path]] = []
     for raw_input in inputs:
-        root = Path(raw_input)
-        if not root.exists():
-            print(f"Error: '{root}' does not exist", file=sys.stderr)
+        input_path = Path(raw_input)
+        if not input_path.exists():
+            print(f"Error: '{input_path}' does not exist", file=sys.stderr)
             return 64
         try:
-            paths.extend((p, size, root) for p, size in _find_files(root))
+            if input_path.is_file():
+                # Single file: report its own name (relative to its parent),
+                # mirroring the Node engine's dirname(root).
+                size = input_path.stat().st_size
+                if size > MAX_FILE_BYTES:
+                    raise ValueError(
+                        f'"{input_path}" is {size} bytes, exceeds the {MAX_FILE_BYTES} byte limit'
+                    )
+                paths.append((input_path, size, input_path.parent))
+            else:
+                root = input_path
+                paths.extend((p, size, root) for p, size in _find_files(root))
         except ValueError as exc:
             print(f"Scan failed: {exc}", file=sys.stderr)
             return 64
     if not paths:
         print("No Markdown, JSON, or YAML files found.", file=sys.stderr)
+        return 64
+
+    # Global limits across all inputs (each _find_files() enforces
+    # per-directory limits; the merged set is checked once more here).
+    total_bytes = sum(size for _, size, _ in paths)
+    if len(paths) > MAX_FILES:
+        print(f"Scan failed: file count {len(paths)} exceeds the {MAX_FILES} file limit", file=sys.stderr)
+        return 64
+    if total_bytes > MAX_TOTAL_BYTES:
+        print(f"Scan failed: total {total_bytes} bytes exceeds the {MAX_TOTAL_BYTES} byte limit", file=sys.stderr)
         return 64
 
     files = []

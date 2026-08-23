@@ -196,8 +196,10 @@ function validateInput(name, content) {
   if (typeof name !== "string" || !name.trim()) throw new TypeError("A file name is required.");
   if (typeof content !== "string") throw new TypeError("File content must be text.");
   // Byte-accurate limit (UTF-8), not character count — a CJK-heavy file can
-  // be 3 bytes/char.
-  if (Buffer.byteLength(content, "utf8") > 2_000_000) throw new RangeError("File is larger than the 2 MB scan limit.");
+  // be 3 bytes/char. TextEncoder works in both Node and browsers (Buffer is
+  // Node-only and would break the web UI).
+  const bytes = new TextEncoder().encode(content).byteLength;
+  if (bytes > 2_000_000) throw new RangeError("File is larger than the 2 MB scan limit.");
 }
 
 // Normalize Unicode (NFKC collapses lookalike/confusable characters) and drop

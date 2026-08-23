@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile, stat, readdir } from "node:fs/promises";
-import { resolve, basename, relative } from "node:path";
+import { resolve, basename, dirname, relative } from "node:path";
 import process from "node:process";
 import { LEVELS, scanFiles, toSarif } from "./scanner.js";
 
@@ -41,7 +41,9 @@ async function findFiles(inputPath) {
     if (info.size > MAX_FILE_BYTES) {
       throw new Error(`"${inputPath}" is ${info.size} bytes, exceeds the ${MAX_FILE_BYTES} byte limit`);
     }
-    return [{ path: absolute, root: absolute, bytes: info.size }];
+    // root = parent directory so relative(root, path) yields a usable name
+    // (e.g. "SKILL.md" instead of an empty string) in multi-file scans.
+    return [{ path: absolute, root: dirname(absolute), bytes: info.size }];
   }
   if (!info.isDirectory()) throw new Error("Input must be a file or directory.");
   const entries = await readdir(absolute, { withFileTypes: true, recursive: true });
@@ -110,6 +112,15 @@ async function main() {
   const paths = [];
   for (const input of inputs) paths.push(...await findFiles(input));
   if (!paths.length) throw new Error("No Markdown, JSON, or YAML files found.");
+  // Global limits across all inputs (each findFiles() enforces per-directory
+  // limits; the merged set is checked once more here).
+  const totalBytes = paths.reduce((sum, f) => sum + f.bytes, 0);
+  if (paths.length > MAX_FILES) {
+    throw new Error(`scan file count ${paths.length} exceeds the ${MAX_FILES} file limit`);
+  }
+  if (totalBytes > MAX_TOTAL_BYTES) {
+    throw new Error(`scan total ${totalBytes} bytes exceeds the ${MAX_TOTAL_BYTES} byte limit`);
+  }
   const files = [];
   for (const { path, root } of paths) {
     files.push({

@@ -78,6 +78,10 @@ npm run test:all      # Node 11 用例 + Python 11 用例
 
 Node/Python 引擎直接读 JSON；网页端（浏览器无文件系统）读 `rules/rules.js` 生成物，由 `scripts/sync-rules.mjs` 保证两者一致。
 
+## License
+
+[MIT](LICENSE) © liuhaolin07
+
 ## 风险模型
 
 每条规则只计一次分，保留至多三处证据，避免重复文本无限抬高分数。`CRITICAL` 规则会直接将总体等级提升为 `CRITICAL`；其他信号累加后分级。多文件扫描采用最高文件风险，并汇总全部发现。

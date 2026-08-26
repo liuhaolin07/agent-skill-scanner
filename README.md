@@ -118,6 +118,10 @@ npm run test:all      # 双端全套（Node 25 用例 + Python 22 用例）
 
 Node/Python 引擎直接读 JSON；网页端（浏览器无文件系统）读 `rules/rules.js` 生成物，由 `scripts/sync-rules.mjs` 保证两者一致。
 
+## 生态
+
+- [SkillHub](https://github.com/liuhaolin07/skillhub) — 本地优先的 Agent Skill 管理平台，内置本扫描器作为可选安全审计引擎（风险徽章、逐条 finding、证据行号）。
+
 ## 参与贡献
 
 [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md)（漏洞报告走 GitHub Private Vulnerability Reporting）· [CHANGELOG.md](CHANGELOG.md) · [规则编写规范](docs/rule-authoring.md) · [规则 JSON Schema](rules/scanner-rules.schema.json)

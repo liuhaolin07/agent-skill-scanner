@@ -29,9 +29,9 @@ jobs:
         uses: github/codeql-action/init@42947a340483f03ba47bb1a039b2c519aab3df85 # v3
         with:
           languages: ${{ matrix.language }}
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@42947a340483f03ba47bb1a039b2c519aab3df85 # v3
+          # Both languages are interpreted and the repo has no build step,
+          # so skip autobuild entirely (it cannot infer a build here).
+          build-mode: none
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@42947a340483f03ba47bb1a039b2c519aab3df85 # v3
